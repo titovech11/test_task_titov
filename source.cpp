@@ -1,317 +1,221 @@
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/highgui/highgui.hpp>
+#include <opencv2/core.hpp>
+#include <opencv2/highgui.hpp>
 #include <iostream>
+#include <vector>
+#include <iterator>
+#include <fstream>
 
+#include "dav_class.h"
 using namespace cv;
 
-class _Figure
+DAV test("Test.dav");
+std::string path = "json/Test_";
+std::vector<int> jsonCadrNumbers{ 2, 3, 4, 5, 6, 21, 46, 47, 48 };
+
+Mat3b canvas;
+Rect button1;
+
+std::vector<Rect> rectFromJson(const std::string& filePath) {
+	FileStorage fs(filePath, FileStorage::READ);
+	Point first{0};
+	Point second{0};
+	std::vector<Rect> allRects{0};
+	FileNode root = fs["shapes"];
+
+	for (int i = 0; i < root.size(); ++i)
+	{
+		FileNode allPoints = fs["shapes"][i]["points"][0];
+		first.x = allPoints[0].real();
+		first.y = allPoints[1].real();
+
+		allPoints = fs["shapes"][i]["points"][1];
+		second.x = allPoints[0].real();
+		second.y = allPoints[1].real();
+
+		Rect signRect(first, second);
+		allRects.push_back(signRect);
+	}
+
+	return allRects;
+}
+
+void replaceAll(std::string& str, const std::string& from, const std::string& to)
 {
-public:
-    _Figure() = default;
-    _Figure(const _Figure&) = default;
-    _Figure(const Point pt)
-    {
-        _pt1.x = pt.x;
-        _pt1.y = pt.y;
-    }
-    ~_Figure() = default;
+	size_t start_pos = 0;
+	while ((start_pos = str.find(from, start_pos)) != std::string::npos)
+	{
+		size_t end_pos = start_pos + from.length();
+		str.replace(start_pos, end_pos, to);
+		start_pos += to.length();
+	}
+}
 
-    _Figure& operator=(const _Figure&) = default;
-
-    void virtual draw() {};
-    void virtual rescale() {};
-    void virtual hide() {};
-    void virtual move() {};
-
-
-    Point _pt1 = Point(0, 0);
-    float scale{ 1 };
-};
-
-class _Rect : public _Figure
+void showDav(DAV& davVideo, std::vector<int> jsonCadrNumbers, std::string pathToJson)
 {
-public:
-    _Rect() = default;
-    _Rect(const _Rect&) = default;
-    _Rect(const Point pt1, const Point pt2, const int thick)
-    {
-        _pt1.x = pt1.x;
-        _pt1.y = pt1.y;
-        _pt2.x = pt2.x;
-        _pt2.y = pt2.y;
-        thickness = thick;
-    };
-    ~_Rect() = default;
+	std::vector<Rect> signRects;
+	std::string search_string = "null";
+	std::string replace_string = "0,";
+	for (int i = 1; i <= davVideo.CountKadr; ++i)
+	{
+		Mat currCadr = davVideo.cadr(i);
+		for (auto j = jsonCadrNumbers.cbegin(); j != jsonCadrNumbers.cend(); ++j)
+		{
+			if (*j == i)
+			{
+				pathToJson.insert(10, std::to_string(*j));
+				pathToJson += ".json";
+				std::string inbuf;
+				std::fstream input_file(pathToJson, std::ios::in);
+				pathToJson.erase(10);
+				pathToJson.insert(10, std::to_string(*j));
+				pathToJson += "_NoNull.json";
+				std::ofstream output_file(pathToJson);
+				while (!input_file.eof())
+				{
+					getline(input_file, inbuf);
+					size_t foundpos = inbuf.find(search_string);
+					if (foundpos != std::string::npos)
+						replaceAll(inbuf, search_string, replace_string);
 
-    _Rect& operator=(const _Rect&) = default;
+					output_file << inbuf << std::endl;
+				}
+				std::vector<Rect> signRect = rectFromJson(pathToJson);;
+				pathToJson.erase(10);
 
-    void virtual draw(Mat& img)
-    {
-        rectangle(img,
-            Point(_pt1.x, _pt1.y),
-            Point(_pt2.x, _pt2.y),
-            Scalar(255, 255, 255),
-            thickness,
-            lineType);
-    }
+				for (auto k = signRect.cbegin(); k != signRect.cend(); ++k)
+				{
+					rectangle(currCadr, *k, Scalar(0, 255, 0), 1);
+				}
+			}
+		}
 
-    void virtual hide(Mat& img)
-    {
-        rectangle(img,
-            Point(_pt1.x, _pt1.y),
-            Point(_pt2.x, _pt2.y),
-            Scalar(0, 0, 0),
-            thickness,
-            lineType);
-    };
+		namedWindow("in", 0);
+		imshow("in", currCadr);
+		if (cv::waitKey(33) >= 0) break;
+	}
+}
 
-    void virtual rescale(const int scale_koef)
-    {
-        _pt2.x = _pt2.x * scale_koef;
-        _pt2.y = _pt2.y * scale_koef;
-        scale = scale_koef;
-    }
-
-    void virtual move(const int x, const int y)
-    {
-        _pt1.x = _pt1.x + x;
-        _pt1.y = _pt1.y + y;
-        _pt2.x = _pt2.x + x;
-        _pt2.y = _pt2.y + y;
-    }
-
-
-private:
-    Point _pt2 = Point(0, 0);
-    int thickness{ 0 };
-    int lineType = LINE_8;
-};
-
-class _Triangle : public _Figure
+void saveResJson(std::string path, const std::vector<Point> points)
 {
-public:
-    _Triangle() = default;
-    _Triangle(const _Triangle&) = default;
-    _Triangle(const Point pt1, const Point pt2, const Point pt3, const int thick)
-    {
-        _pt1.x = pt1.x;
-        _pt1.y = pt1.y;
-        _pt2.x = pt2.x;
-        _pt2.y = pt2.y;
-        _pt3.x = pt3.x;
-        _pt3.y = pt3.y;
-        thickness = thick;
-    };
-    ~_Triangle() = default;
+	std::string final_path = "json/answerCadr_" + path;
+	FileStorage fs(final_path, FileStorage::WRITE);
+	fs << "label" << "";
+	fs << "points" << "[";
+	for (int i = 0; i < points.size(); ++i)
+	{
+		fs << "[" << points[i].x;
+		fs << points[i].y << "]";
+	}
+	fs << "]";
+	fs << "group_id" << "null";
+	fs << "shape_type" << "polygon";
+	fs << "flags" << "{";
+	fs << "tool" << "ZnakGenerator";
+	fs << "NN type" << "UNet";
+	fs << "classifier" << "road sign";
+	fs << "object type" << 0;
+	fs.release();
+}
 
-    _Triangle& operator=(const _Triangle&) = default;
-
-    void virtual draw(Mat& img)
-    {
-        line(img,
-            _pt1,
-            _pt2,
-            Scalar(255, 0, 255),
-            thickness,
-            lineType);
-        line(img,
-            _pt1,
-            _pt3,
-            Scalar(255, 0, 255),
-            thickness,
-            lineType);
-        line(img,
-            _pt3,
-            _pt2,
-            Scalar(255, 0, 255),
-            thickness,
-            lineType);
-    }
-
-    void virtual hide(Mat& img)
-    {
-        line(img,
-            _pt1,
-            _pt2,
-            Scalar(0, 0, 0),
-            thickness,
-            lineType);
-        line(img,
-            _pt1,
-            _pt3,
-            Scalar(0, 0, 0),
-            thickness,
-            lineType);
-        line(img,
-            _pt3,
-            _pt2,
-            Scalar(0, 0, 0),
-            thickness,
-            lineType);
-    };
-
-    void virtual rescale(const int scale_koef)
-    {
-        _pt2.x = _pt2.x * scale_koef;
-        _pt2.y = _pt2.y * scale_koef;
-        _pt3.x = _pt3.x * scale_koef;
-        _pt3.y = _pt3.y * scale_koef;
-    }
-
-    void virtual move(const int x, const int y)
-    {
-        _pt1.x = _pt1.x + x;
-        _pt1.y = _pt1.y + y;
-        _pt2.x = _pt2.x + x;
-        _pt2.y = _pt2.y + y;
-        _pt3.x = _pt3.x + x;
-        _pt3.y = _pt3.y + y;
-    }
-
-
-private:
-    Point _pt2 = Point(0, 0);
-    Point _pt3 = Point(0, 0);
-    int thickness{ 0 };
-    int lineType = LINE_8;
-};
-
-class _Circle : public _Figure
+void callBackFuncButton1(int event, int x, int y, int flags, void* userdata)
 {
-public:
-    _Circle() = default;
-    _Circle(const _Circle&) = default;
-    _Circle(const Point center, const int r, const int thick):_r(r), thickness(thick)
-    {
-        _pt1.x = center.x;
-        _pt1.y = center.y;
-    };
-    ~_Circle() = default;
+	std::vector<std::vector<Point> > contours;
+	std::vector<Vec4i> hierarchy;
+	std::string search_string = "null";
+	std::string replace_string = "0,";
+	if (event == EVENT_LBUTTONDOWN)
+	{
+		if (button1.contains(Point(x, y)))
+		{
+			std::cout << "Clicked!" << std::endl;
+			std::vector<Mat> croppedSigns;
+			std::vector<Mat> grayCroppedSigns;
+			int l = 0;
+			for (int i = 1; i <= test.CountKadr; ++i)
+			{
+				Mat currCadr = test.cadr(i);
+				for (auto j = jsonCadrNumbers.cbegin(); j != jsonCadrNumbers.cend(); ++j)
+				{
+					if (*j == i)
+					{
+						path.insert(10, std::to_string(*j));
+						path += ".json";
+						std::string inbuf;
+						std::fstream input_file(path, std::ios::in);
+						path.erase(10);
+						path.insert(10, std::to_string(*j));
+						path += "_NoNull.json";
+						std::ofstream output_file(path);
+						while (!input_file.eof())
+						{
+							getline(input_file, inbuf);
+							size_t foundpos = inbuf.find(search_string);
+							if (foundpos != std::string::npos)
+								replaceAll(inbuf, search_string, replace_string);
+							output_file << inbuf << std::endl;
+						}
+						std::vector<Rect> signRect = rectFromJson(path);;
+						path.erase(10);
 
-    _Circle& operator=(const _Circle&) = default;
+						for (auto k = signRect.cbegin(); k != signRect.cend(); ++k)
+						{
+							croppedSigns.push_back(currCadr(*k));
+							grayCroppedSigns.push_back(currCadr(*k));
+							namedWindow("croppedSign", 0);
+							imshow("croppedSign", test.cadr(i)(*k));
+							medianBlur(grayCroppedSigns[l], grayCroppedSigns[l], 9);
+							cvtColor(grayCroppedSigns[l], grayCroppedSigns[l], COLOR_BGR2GRAY);
+							threshold(grayCroppedSigns[l], grayCroppedSigns[l], 83, 255, THRESH_BINARY);
 
-    void virtual draw(Mat& img)
-    {
-        circle(img,
-            _pt1,
-            _r,
-            Scalar(0, 0, 255),
-            thickness,
-            lineType);
-    }
+							findContours(grayCroppedSigns[l], contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+							approxPolyDP(Mat(contours[0]), contours[0], 5, true);
+							std::vector<Point> PolyPoints;
+							for (auto pts = contours[0].begin(); pts != contours[0].end(); ++pts)
+							{
+								pts[0].x += signRect[0].x;
+								pts[0].y += signRect[0].y;
+								PolyPoints.push_back(Point(pts[0].x, pts[0].y));
+								std::cout << "point x - " << pts[0].x << ", point y - " << pts[0].y << std::endl;
+								pts[0].x -= signRect[0].x;
+								pts[0].y -= signRect[0].y;
+							}
+							std::cout << std::endl;
+							saveResJson(std::to_string(i) + "_Sign_" + std::to_string(l) + ".json", PolyPoints);
 
-    void virtual hide(Mat& img)
-    {
-        circle(img,
-            _pt1,
-            _r,
-            Scalar(0, 0, 0),
-            thickness,
-            lineType);
-    };
+							drawContours(croppedSigns[l], contours, -1, Scalar(0, 0, 255), 1);
 
-    void virtual rescale(const int scale_koef)
-    {
-        _r = _r * scale_koef;
-    }
+							namedWindow("PolySign", 0);
+							imshow("PolySign", croppedSigns[l]);
+							l++;
+							if (cv::waitKey(500) >= 0) break;
+						}
+					}
+				}
+				if (cv::waitKey(100) >= 0) break;
+			}
+		}
+	}
+	if (event == EVENT_LBUTTONUP)
+	{
+		rectangle(canvas, button1, Scalar(200, 200, 200), 2);
+	}
 
-    void virtual move(const int x, const int y)
-    {
-        _pt1.x = _pt1.x + x;
-        _pt1.y = _pt1.y + y;
-    }
-
-private:
-    int _r{ 0 };
-    int thickness{ 0 };
-    int lineType = LINE_8;
-};
-
-class _Ellipse : public _Figure
-{
-public:
-    _Ellipse() = default;
-    _Ellipse(const _Ellipse&) = default;
-    _Ellipse(const Point center, const Size size, const float angle, const int thick) : thickness(thick), _angle(angle)
-    {
-        _pt1.x = center.x;
-        _pt1.y = center.y;
-        axes = size;
-    };
-    ~_Ellipse() = default;
-
-    _Ellipse& operator=(const _Ellipse&) = default;
-
-    void virtual draw(Mat& img)
-    {
-        ellipse(img,
-            _pt1,
-            axes,
-            _angle,
-            0,
-            360,
-            Scalar(255, 0, 0),
-            thickness,
-            lineType);
-    }
-
-    void virtual hide(Mat& img)
-    {
-        ellipse(img,
-            _pt1,
-            axes,
-            _angle,
-            0,
-            360,
-            Scalar(255, 255, 255),
-            thickness,
-            lineType);
-    };
-
-    void virtual rescale(const int scale_koef)
-    {
-        axes.height = axes.height * scale_koef;
-        axes.width = axes.width * scale_koef;
-    }
-
-    void virtual move(const int x, const int y)
-    {
-        _pt1.x = _pt1.x + x;
-        _pt1.y = _pt1.y + y;
-    }
-
-private:
-    int thickness{ 0 };
-    int lineType = LINE_8;
-    Size axes = Size(0, 0);
-    float _angle{ 0 };
-};
+	imshow("Button", canvas);
+	cv::waitKey(1);
+}
 
 int main() {
+	Mat3b img(60, 50, Vec3b(0, 255, 0));
+	button1 = Rect(0, 0, img.cols, img.rows);
+	canvas = Mat3b(img.rows, img.cols, Vec3b(0, 0, 0));
+	canvas(button1) = Vec3b(200, 200, 200);
+	putText(canvas(button1), "click!", Point(button1.width * 0.15, button1.height * 0.6), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
 
-    Mat img = Mat::zeros(800, 800, CV_8UC3);
+	namedWindow("Button", 0);
+	setMouseCallback("Button", callBackFuncButton1);
+	imshow("Button", canvas);
 
-    _Rect x(Point(100, 100), Point(200, 200), 2);
-    x.draw(img);
-    x.rescale(2);
-    x.move(50, 50);
-    x.draw(img);
+	showDav(test, jsonCadrNumbers, path);
 
-    _Circle y(Point(400, 400), 100, 2);
-    y.rescale(2);
-    y.move(-50, 50);
-    y.draw(img);
-
-    _Ellipse z(Point(400, 400), Size(50, 100), 45, 2);
-    z.draw(img);
-    z.move(-50, 50);
-    z.rescale(2);
-    z.draw(img);
-
-
-    _Triangle v(Point(100, 100), Point(50, 100), Point(200, 50), 2);
-    v.draw(img);
-
-    imshow("qwqw", img);
-    waitKey(0);
+    cv::waitKey(0);
 }

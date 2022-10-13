@@ -1,5 +1,13 @@
-project(test_task_titov)
-add_executable(test_task_titov source.cpp)
+project(source)
 
-target_link_libraries(test_task_titov ${OpenCV_LIBS})
+file(GLOB SOURCES
+    dav_class.h
+    source.cpp
+)
 
+add_executable(source  ${SOURCES})
+
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/json
+DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
+target_link_libraries(source ${OpenCV_LIBS})
