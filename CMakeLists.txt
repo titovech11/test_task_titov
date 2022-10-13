@@ -9,5 +9,8 @@ add_executable(source  ${SOURCES})
 
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/json
 DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/Test.dav
+DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+
 
 target_link_libraries(source ${OpenCV_LIBS})
