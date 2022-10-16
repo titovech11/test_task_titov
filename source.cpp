@@ -14,6 +14,7 @@ std::vector<int> jsonCadrNumbers{ 2, 3, 4, 5, 6, 21, 46, 47, 48 };
 
 Mat3b canvas;
 Rect button1;
+Rect button2;
 
 std::vector<Rect> rectFromJson(const std::string& filePath) {
 	FileStorage fs(filePath, FileStorage::READ);
@@ -97,7 +98,7 @@ void showDav(DAV& davVideo, std::vector<int> jsonCadrNumbers, std::string pathTo
 
 void saveResJson(std::string path, const std::vector<Point> points)
 {
-	std::string final_path = "json/answerCadr_" + path;
+	std::string final_path = "json/Test_" + path;
 	FileStorage fs(final_path, FileStorage::WRITE);
 	fs << "label" << "";
 	fs << "points" << "[";
@@ -123,17 +124,24 @@ void callBackFuncButton1(int event, int x, int y, int flags, void* userdata)
 	std::vector<Vec4i> hierarchy;
 	std::string search_string = "null";
 	std::string replace_string = "0,";
+	//std::cout << "before click" << std::endl;
+	std::vector<Mat> croppedSigns;
+	std::vector<Mat> grayCroppedSigns;
+	int l = 0;
+
 	if (event == EVENT_LBUTTONDOWN)
 	{
-		if (button1.contains(Point(x, y)))
+		for (int i = 1; i <= test.CountKadr; ++i)
 		{
-			std::cout << "Clicked!" << std::endl;
-			std::vector<Mat> croppedSigns;
-			std::vector<Mat> grayCroppedSigns;
-			int l = 0;
-			for (int i = 1; i <= test.CountKadr; ++i)
+			Mat currCadr = test.cadr(i);
+			if (button2.contains(Point(x, y)))
 			{
-				Mat currCadr = test.cadr(i);
+				std::cout << "stop click" << std::endl;
+				cv::waitKey(0);
+			}
+			if (button1.contains(Point(x, y)))
+			{
+				std::cout << "play click" << std::endl;
 				for (auto j = jsonCadrNumbers.cbegin(); j != jsonCadrNumbers.cend(); ++j)
 				{
 					if (*j == i)
@@ -157,65 +165,61 @@ void callBackFuncButton1(int event, int x, int y, int flags, void* userdata)
 						std::vector<Rect> signRect = rectFromJson(path);;
 						path.erase(10);
 
-						for (auto k = signRect.cbegin(); k != signRect.cend(); ++k)
+						for (int k = 0; k < signRect.size(); ++k)
 						{
-							croppedSigns.push_back(currCadr(*k));
-							grayCroppedSigns.push_back(currCadr(*k));
-							namedWindow("croppedSign", 0);
-							imshow("croppedSign", test.cadr(i)(*k));
-							medianBlur(grayCroppedSigns[l], grayCroppedSigns[l], 9);
-							cvtColor(grayCroppedSigns[l], grayCroppedSigns[l], COLOR_BGR2GRAY);
-							threshold(grayCroppedSigns[l], grayCroppedSigns[l], 83, 255, THRESH_BINARY);
+							grayCroppedSigns.push_back(currCadr(signRect[k]));
+							Mat tmp;
+							medianBlur(grayCroppedSigns[l], tmp, 11);
+							cvtColor(tmp, tmp, COLOR_BGR2GRAY);
+							threshold(tmp, tmp, 85, 255, THRESH_BINARY);
 
-							findContours(grayCroppedSigns[l], contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
-							approxPolyDP(Mat(contours[0]), contours[0], 5, true);
+							croppedSigns.push_back(currCadr(signRect[k]));
+
+							findContours(tmp, contours, hierarchy, RETR_EXTERNAL, CHAIN_APPROX_SIMPLE);
+							approxPolyDP(Mat(contours[0]), contours[0], 9, true);
 							std::vector<Point> PolyPoints;
 							for (auto pts = contours[0].begin(); pts != contours[0].end(); ++pts)
 							{
 								pts[0].x += signRect[0].x;
 								pts[0].y += signRect[0].y;
 								PolyPoints.push_back(Point(pts[0].x, pts[0].y));
-								std::cout << "point x - " << pts[0].x << ", point y - " << pts[0].y << std::endl;
 								pts[0].x -= signRect[0].x;
 								pts[0].y -= signRect[0].y;
 							}
 							std::cout << std::endl;
 							saveResJson(std::to_string(i) + "_Sign_" + std::to_string(l) + ".json", PolyPoints);
-
-							drawContours(croppedSigns[l], contours, -1, Scalar(0, 0, 255), 1);
-
-							namedWindow("PolySign", 0);
-							imshow("PolySign", croppedSigns[l]);
+							drawContours(currCadr(signRect[k]), contours, -1, Scalar(0, 0, 255), 4);
+							rectangle(currCadr, signRect[k], Scalar(0, 255, 0), 1);
 							l++;
-							if (cv::waitKey(500) >= 0) break;
+							if (cv::waitKey(100) >= 0) break;
 						}
 					}
 				}
-				if (cv::waitKey(100) >= 0) break;
 			}
+			namedWindow("test", 0);
+			imshow("test", currCadr);
+			if (cv::waitKey(100) >= 0) break;
+
 		}
 	}
-	if (event == EVENT_LBUTTONUP)
-	{
-		rectangle(canvas, button1, Scalar(200, 200, 200), 2);
-	}
-
-	imshow("Button", canvas);
-	cv::waitKey(1);
 }
 
 int main() {
-	Mat3b img(60, 50, Vec3b(0, 255, 0));
-	button1 = Rect(0, 0, img.cols, img.rows);
+	Mat3b img(100, 100, Vec3b(0, 255, 0));
+
+	button1 = Rect(0, 0, img.cols, img.rows/2);
+	button2 = Rect(0, img.cols / 2, img.cols, img.rows/2);
+
 	canvas = Mat3b(img.rows, img.cols, Vec3b(0, 0, 0));
 	canvas(button1) = Vec3b(200, 200, 200);
-	putText(canvas(button1), "click!", Point(button1.width * 0.15, button1.height * 0.6), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
+	canvas(button2) = Vec3b(200, 200, 200);
+	putText(canvas(button1), "play", Point(button1.width * 0.15, button1.height * 0.6), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
+	putText(canvas(button2), "stop", Point(button2.width * 0.15, button2.height * 0.6), FONT_HERSHEY_PLAIN, 1, Scalar(0, 0, 0));
+
 
 	namedWindow("Button", 0);
 	setMouseCallback("Button", callBackFuncButton1);
 	imshow("Button", canvas);
-
-	showDav(test, jsonCadrNumbers, path);
 
     cv::waitKey(0);
 }
