@@ -1,5 +1,5 @@
 # test_task_titov
-задание для НПО Регион.
-Для сборки требуется программа CMake и библиотека OpenCV
+Simple .dav player and NN data visualisation.
+CMake & OpenCV required
 
 
